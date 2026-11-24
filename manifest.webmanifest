@@ -1,0 +1,9 @@
+{
+  "name": "Fire Alarm Deficiency Manager",
+  "short_name": "FA Deficiencies",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f2f5f8",
+  "theme_color": "#10283f",
+  "description": "Collaborative fire alarm deficiency reports and PDF closeout"
+}

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10283f">
+<meta name="description" content="Fire Alarm Deficiency Manager">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Fire Alarm Deficiency Manager</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#172536;background:#f2f5f8}
+*{box-sizing:border-box}body{margin:0}header{background:#10283f;color:white;padding:18px max(16px,calc((100vw - 1050px)/2));display:flex;justify-content:space-between;align-items:center;gap:12px}
+header h1{font-size:18px;margin:0}header small{opacity:.75}main{max-width:1050px;margin:20px auto;padding:0 14px 50px}
+.panel{background:white;border:1px solid #dce3e9;border-radius:14px;padding:18px;margin:0 0 16px;box-shadow:0 2px 8px #15283a0a}
+h2{font-size:17px;margin:0 0 14px}.muted{color:#667789;font-size:13px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}.full{grid-column:1/-1}
+label{font-size:12px;font-weight:750;color:#405368}
+input,select,textarea{font:inherit;width:100%;border:1px solid #cbd5df;border-radius:9px;padding:11px;background:#fff;color:#172536;min-width:0}
+textarea{min-height:80px;resize:vertical}
+button{font:inherit;font-weight:700;border:0;border-radius:9px;padding:11px 15px;cursor:pointer}
+.primary{background:#155b87;color:white}.secondary{background:#e9eff4;color:#21364a}.danger{background:#fff0ef;color:#a12d25}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.hidden{display:none!important}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.status{font-size:12px;padding:5px 9px;border-radius:30px;background:#e8f4ed;color:#21643b;font-weight:700}
+.carditem{border:1px solid #dce3e9;border-radius:11px;padding:13px;margin:10px 0}
+.carditem h3{font-size:14px;margin:0 0 7px}.meta{font-size:13px;color:#526477;line-height:1.55}
+.photo{width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid #dce3e9;margin:6px 6px 0 0}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#172536;color:white;padding:11px 16px;border-radius:10px;max-width:90vw;display:none;z-index:5}
+.pill{display:inline-block;background:#edf2f6;border-radius:30px;padding:5px 9px;font-size:12px;margin:2px}
+@media(max-width:620px){main{margin:12px auto}.grid{grid-template-columns:1fr}.full{grid-column:auto}header{padding:15px}.panel{padding:14px}}
+@media print{header,.no-print{display:none!important}body{background:white}main{margin:0;max-width:none}.panel{box-shadow:none}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+<header><div><h1>Fire Alarm Deficiency Manager</h1><small>Field reporting · Team collaboration · PDF closeout</small></div><button id="logoutBtn" class="secondary hidden">Sign out</button></header>
+<main>
+<section id="setupPanel" class="panel">
+<h2>Connect your cloud database</h2>
+<p class="muted">Enter your Supabase Project URL and public anon key. These are project connection details, not your account password. Your database policies protect report access.</p>
+<div class="grid">
+<div class="field full"><label>SUPABASE PROJECT URL</label><input id="supabaseUrl" placeholder="https://your-project.supabase.co"></div>
+<div class="field full"><label>SUPABASE ANON / PUBLISHABLE KEY</label><textarea id="supabaseKey" placeholder="Paste your public anon/publishable key"></textarea></div>
+</div><div class="actions"><button id="connectBtn" class="primary">Connect application</button></div>
+<p class="muted">Connection details are saved only in this browser on this device. Do not enter a service-role key.</p>
+</section>
+
+<section id="authPanel" class="panel hidden">
+<h2>Technician sign in</h2><div class="grid">
+<div class="field"><label>EMAIL</label><input id="email" type="email" autocomplete="username" placeholder="technician@company.com"></div>
+<div class="field"><label>PASSWORD</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"></div>
+</div><div class="actions"><button id="signinBtn" class="primary">Sign in</button><button id="signupBtn" class="secondary">Create technician account</button></div>
+<p class="muted">Each technician needs an individual account. Use the same Supabase project on all three phones.</p>
+</section>
+
+<section id="workspace" class="hidden">
+<section class="panel">
+<div class="topline"><div><h2>Reports</h2><div id="signedInAs" class="muted"></div></div><span class="status" id="connectionStatus">Connected</span></div>
+<div class="grid">
+<div class="field"><label>CREATE NEW PROPERTY REPORT</label><input id="newProperty" placeholder="Property / customer name"></div>
+<div class="field"><label>PROPERTY ADDRESS</label><input id="newAddress" placeholder="Street, city, state"></div>
+</div><div class="actions"><button id="createReportBtn" class="primary">Create report</button></div>
+<div class="field" style="margin-top:16px"><label>JOIN AN EXISTING REPORT WITH CODE</label><input id="joinCode" placeholder="Enter report join code"></div><div class="actions"><button id="joinBtn" class="secondary">Join report</button></div>
+<div id="reportsList" style="margin-top:12px"></div>
+</section>
+
+<section id="reportPanel" class="hidden">
+<div class="panel">
+<div class="topline"><div><h2 id="reportTitle">Selected property</h2><div id="reportAddress" class="muted"></div></div><button id="backBtn" class="secondary no-print">All reports</button></div>
+<div class="grid">
+<div class="field"><label>REPORT STATUS</label><select id="reportStatus"><option value="draft">Draft / In progress</option><option value="ready">Ready for review</option><option value="closed">Closed out</option></select></div>
+<div class="field"><label>REPORT JOIN CODE</label><input id="reportCode" readonly></div>
+</div>
+<div style="margin-top:12px"><label>ACTIVE TEAM MEMBERS (MAXIMUM 3)</label><div id="teamList" class="muted">Loading team…</div></div>
+</div>
+
+<div class="panel no-print">
+<h2>Add a deficiency</h2>
+<div class="grid">
+<div class="field"><label>DEVICE TYPE</label><select id="deviceType">
+<option>Smoke detector</option><option>Heat detector</option><option>Pull station</option><option>Horn/strobe</option><option>Strobe</option><option>Duct detector</option><option>Monitor module</option><option>Control module</option><option>Relay module</option><option>Fire alarm control panel</option><option>Annunciator</option><option>Power supply</option><option>Other</option></select></div>
+<div class="field"><label>FLOOR</label><input id="floor" placeholder="e.g. 2nd Floor"></div>
+<div class="field full"><label>DEVICE LOCATION</label><input id="location" placeholder="e.g. East hallway outside Suite 210"></div>
+<div class="field"><label>PART NUMBER</label><input id="partNumber" placeholder="Manufacturer part number"></div>
+<div class="field"><label>QUANTITY TO REPLACE</label><input id="quantity" type="number" min="1" step="1" value="1"></div>
+<div class="field"><label>ESTIMATED MINUTES PER DEVICE</label><input id="minutesEach" type="number" min="0" step="1" value="30"></div>
+<div class="field"><label>ADDITIONAL LABOR MINUTES (ACCESS / TESTING)</label><input id="extraMinutes" type="number" min="0" step="1" value="0"></div>
+<div class="field full"><label>DEFICIENCY DESCRIPTION / RECOMMENDED ACTION</label><textarea id="description" placeholder="Describe the observed condition and recommended corrective action."></textarea></div>
+<div class="field full"><label>DEVICE PHOTOS</label><input id="photos" type="file" accept="image/*" capture="environment" multiple><div class="muted">Use the phone camera or select existing photos. Uploads are stored in the private project bucket.</div></div>
+</div><div class="actions"><button id="addDeficiencyBtn" class="primary">Save deficiency</button></div>
+</div>
+
+<div class="panel">
+<div class="topline"><h2>Deficiencies</h2><span id="deficiencyCount" class="status">0 items</span></div>
+<div id="deficienciesList" class="muted">No deficiencies entered yet.</div>
+</div>
+
+<div class="panel">
+<h2>Labor estimate</h2>
+<div class="grid">
+<div><div class="muted">Estimated total labor</div><div id="laborTotal" style="font-size:26px;font-weight:800">0.00 hrs</div></div>
+<div><div class="muted">Total devices</div><div id="deviceTotal" style="font-size:26px;font-weight:800">0</div></div>
+</div><p class="muted">Labor is calculated from quantity × minutes per device + additional minutes for each deficiency. Estimates are editable planning allowances, not code-required durations.</p>
+</div>
+
+<div class="panel no-print">
+<h2>Closeout & PDF</h2>
+<div class="field"><label>PROPOSED SCOPE OF WORK</label><textarea id="scopeText" rows="5" placeholder="The application will draft a scope from the recorded deficiencies. You can edit it before PDF export."></textarea></div>
+<div class="actions"><button id="draftScopeBtn" class="secondary">Draft scope of work</button><button id="pdfBtn" class="primary">Generate PDF closeout</button></div>
+<p class="muted">PDF includes property details, deficiencies, parts, quantities, photos where available, labor estimate, scope of work, report status, and technician list.</p>
+</div>
+</section>
+</section>
+</main>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body></html>
